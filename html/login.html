@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DJI Cloud API - Persistent Connection Demo</title>
+  <style>
+    /* Modern minimal styling */
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    header {
+      background: #2e6da4;
+      color: #fff;
+      padding: 20px;
+      text-align: center;
+      position: relative;
+    }
+    header h1 { margin: 0; }
+    .instruction {
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 20px;
+    }
+    .section {
+      background: #fff;
+      margin-bottom: 20px;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .section h2 {
+      margin-top: 0;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+    .btn {
+      background: #2e6da4;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 4px;
+      transition: background 0.3s ease;
+    }
+    .btn:hover { background: #204d74; }
+    .btn-secondary {
+      background: #777;
+    }
+    .btn-secondary:hover { background: #555; }
+    #logArea {
+      background: #eef;
+      border: 1px solid #ccc;
+      padding: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-family: monospace;
+      font-size: 14px;
+      border-radius: 4px;
+    }
+    .topic-card {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px;
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .topic-info { flex: 1; }
+    .topic-name { font-weight: bold; margin-bottom: 4px; }
+    .topic-status { margin-bottom: 4px; }
+    .status-success { color: green; font-weight: bold; }
+    .status-fail { color: red; font-weight: bold; }
+    .topic-data { margin-top: 4px; font-size: 13px; color: #555; }
+    .topic-actions { text-align: right; }
+    @media (max-width: 600px) {
+      .topic-card { flex-direction: column; align-items: flex-start; }
+      .topic-actions { margin-top: 10px; text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>DJI Cloud API - Persistent Connection Demo</h1>
+    <div class="instruction">
+      1. Press <strong>Login &amp; Connect</strong> to establish a connection.<br>
+      2. Use the top‑left back arrow in DJI Pilot to switch to camera mode.<br>
+      3. <strong>Do NOT press the exit button!</strong> The connection will remain active.
+    </div>
+  </header>
+  <div class="container">
+    <!-- Global Connection Section -->
+    <div class="section" id="global-connection">
+      <h2>Global Connection</h2>
+      <button id="global-login" class="btn">Login &amp; Connect</button>
+      <button id="global-logout" class="btn btn-secondary">Logout</button>
+      <div id="globalStatus" style="margin-top:10px; font-size:16px;"></div>
+    </div>
+
+    <!-- Topic Subscription Section: thing/osd Only -->
+    <div class="section" id="topic-subscriptions">
+      <h2>Topic Subscription: thing/osd</h2>
+      <div class="topic-card">
+        <div class="topic-info">
+          <div class="topic-name">thing/osd</div>
+          <div class="topic-status" id="status-thing-osd">Not Subscribed</div>
+          <div class="topic-data" id="data-thing-osd"></div>
+        </div>
+        <div class="topic-actions">
+          <button class="btn" onclick="subscribeTopic('thing/osd')">Subscribe</button>
+          <button class="btn btn-secondary" onclick="unsubscribeTopic('thing/osd')">Unsubscribe</button>
+        </div>
+      </div>
+      <!-- Additional topics can be added here later -->
+    </div>
+
+    <!-- Log Area -->
+    <div class="section">
+      <h2>Connection Log</h2>
+      <div id="logArea">Waiting for events...</div>
+    </div>
+  </div>
+
+  <script>
+    /*
+      Configuration placeholders – these will be replaced by your backend:
+      APP_ID, LICENSE, APP_KEY, MQTT_HOST, MQTT_USERNAME, MQTT_PASSWORD, MQTT_CONNECT_CALLBACK
+    */
+    const APP_ID = "158429";
+    const LICENSE = "dji_license_here";
+    const APP_KEY = "dji_app_key_here";
+
+    const MQTT_HOST = "mqtt_host_here";
+    const MQTT_USERNAME = "mqtt_username_here";
+    const MQTT_PASSWORD = "mqtt_password_here";
+    const MQTT_CONNECT_CALLBACK = "mqtt_connect_callback";
+
+    // Logging utility
+    const logArea = document.getElementById('logArea');
+    function addLog(msg) {
+      const now = new Date().toLocaleTimeString();
+      logArea.textContent += `[${now}] ${msg}\n`;
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    // Update topic card display
+    function updateTopicDisplay(topic, status, data = "") {
+      const id = topic.replace(/[\/]/g, '-'); // e.g., "thing-osd"
+      const statusElem = document.getElementById('status-' + id);
+      const dataElem = document.getElementById('data-' + id);
+      statusElem.textContent = status;
+      dataElem.textContent = data;
+
+      // Apply color-coding based on status
+      statusElem.className = "topic-status";
+      if (status.toLowerCase().includes("success")) {
+        statusElem.classList.add("status-success");
+      } else if (status.toLowerCase().includes("fail")) {
+        statusElem.classList.add("status-fail");
+      }
+    }
+
+    // Global connection callbacks from DJI Cloud API
+    function reg_calback() {
+      addLog("Connection callback triggered: " + JSON.stringify(arguments));
+    }
+
+    // Set up global MQTT message handler (if available)
+    if (window.djiBridge) {
+      window.djiBridge.onMessage = function(topic, payload) {
+        addLog("Received message on " + topic + ": " + JSON.stringify(payload));
+        if (topic === "thing/osd") {
+          updateTopicDisplay("thing/osd", "Success", JSON.stringify(payload));
+        }
+      };
+    } else {
+      addLog("Error: djiBridge is not available.");
+    }
+
+    // Global Login/Logout actions
+    document.getElementById('global-login').addEventListener('click', () => {
+      addLog("=== Starting Global Login Process ===");
+
+      // 1) License verification
+      const token = window.djiBridge.platformVerifyLicense(APP_ID, APP_KEY, LICENSE);
+      addLog("License token: " + token);
+      const verified = window.djiBridge.platformIsVerified();
+      addLog("Platform verified: " + verified);
+      document.getElementById('globalStatus').textContent = "Platform Verified: " + verified;
+
+      // 2) Load 'thing' component with MQTT settings
+      const registerParams = JSON.stringify({
+        host: MQTT_HOST,
+        connectCallback: MQTT_CONNECT_CALLBACK,
+        username: MQTT_USERNAME,
+        password: MQTT_PASSWORD
+      });
+      const loadResult = window.djiBridge.platformLoadComponent("thing", registerParams);
+      addLog("Loaded 'thing' component: " + loadResult);
+
+      // 3) Connect using the 'thing' component
+      const connectResult = window.djiBridge.thingConnect("userloginhere", "userpasswordhere", MQTT_CONNECT_CALLBACK);
+      addLog("Connection initiated. Current state: " + window.djiBridge.thingGetConnectState());
+
+      addLog("=== Global Login Complete ===");
+    });
+
+    // Global Logout: only disconnect if user clicks the button
+    document.getElementById('global-logout').addEventListener('click', () => {
+      addLog("=== Logging out ===");
+      // This explicitly disconnects; it won't be triggered on page unload.
+      const unloadResult = window.djiBridge.platformUnloadComponent("thing");
+      addLog("Unloaded 'thing' component: " + unloadResult);
+      document.getElementById('globalStatus').textContent = "Disconnected";
+      updateTopicDisplay("thing/osd", "Not Subscribed", "");
+      addLog("Logout complete.");
+    });
+
+    // Individual topic subscription functions for thing/osd
+    function subscribeTopic(topic) {
+      const result = window.djiBridge.thingSubscribe(topic, MQTT_CONNECT_CALLBACK);
+      addLog("Subscribe to " + topic + ": " + result);
+      updateTopicDisplay(topic, result.toLowerCase().includes("success") ? "Success" : "Failed");
+    }
+
+    function unsubscribeTopic(topic) {
+      addLog("Unsubscribed from " + topic);
+      updateTopicDisplay(topic, "Not Subscribed", "");
+    }
+
+    // IMPORTANT: There is no unload or beforeunload event handler added here.
+    // This ensures that if you navigate away (using the top-left back arrow),
+    // the connection remains active in the background.
+
+    // Initial log message
+    addLog("Ready. Platform verified: " + window.djiBridge.platformIsVerified());
+  </script>
+</body>
+</html>

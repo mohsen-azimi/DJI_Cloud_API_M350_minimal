@@ -1,0 +1,16 @@
+dji:
+  APP_ID: 158429
+  LICENSE: "W6n/50C92tIdV5/Fnywrdp496gsHvo0+WVO499I/7zD1zQZUpjRAbGcCHuDL3W1Uz5OcJoxTqiOAVPBnTjggEVxh7XVkOXHjlxef+cYL9TcisdCZqDkIbISMEy2ZJkISgfiXgMQWyrT52uaN0yMviwBSX9e47SbTdCDlxozKw68="
+  APP_KEY: "ddce1ba58924a964cbdc7f19eebc82e"
+
+mqtt:
+    HOST: "142.103.138.201" # // mqtt address, example: tcp://xx.xx.xx.xx:xxx
+    PORT: 1883 # // mqtt port, example: 1883
+    CONNECT_CALLBACK: "reg_calback" # js interface for connection status callbacks
+    USERNAME: "mohsen" # mqtt username
+    PASSWORD: "welcomeToMy-World" # mqtt password
+
+fastAPI:
+    HOST: "192.168.8.38" # // fastAPI address, example: xx.xx.xx.xx
+    PORT: 8000 # // fastAPI port, example: 8000
+

@@ -6,17 +6,17 @@ import pprint
 
 from importlib.metadata import version
 
+import yaml
 import paho
 import paho.mqtt.client as mqtt
 
-host_addr = '192.168.109.167' #'192.168.196.37' #os.environ["HOST_ADDR"]
+configs = yaml.safe_load(open("config.yaml"))
+
 
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, flags, rc, properties=None):
     print("Connected with result code " + str(rc))
-    print("🔗Subscribing to topics")
-    print(f"topics: sys/#, thing/#")
 
 
     # Subscribing in on_connect() means that if we lose the connection and
@@ -83,7 +83,9 @@ if PAHO_MAIN_VER == 2:
 client.on_connect = on_connect
 client.on_message = on_message
 
-client.connect(host_addr, 1883, 60)
+
+# client.connect(host_addr, 1883, 60)
+client.connect(configs["mqtt"]["HOST"], configs["mqtt"]["PORT"], 60)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.
